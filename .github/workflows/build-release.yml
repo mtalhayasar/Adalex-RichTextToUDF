@@ -1,0 +1,43 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Python Kurulumu
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Bağımlılıkları Yükle
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: PyInstaller ile Build
+      run: |
+        pyinstaller --onefile --windowed --icon=icons/solo-logo-manual.ico --add-data "logo.png;." --add-data "solo-logo.png;." --add-data "icons;icons" --name AdaLexUDF rtf-to-udf.py
+    
+    - name: Build Çıktısını Kontrol Et
+      run: |
+        dir dist
+    
+    - name: Release Oluştur
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: dist/AdaLexUDF.exe
+        generate_release_notes: true
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

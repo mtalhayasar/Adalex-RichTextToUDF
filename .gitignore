@@ -1,0 +1,45 @@
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# PyInstaller
+build/
+dist/
+*.spec
+*.manifest
+*.exe
+
+# Temporary files
+*.tmp
+*.bak
+*.log
+*.cache
+
+# Personal/local files
+.claude/
+CLAUDE.md
+
+# Icon cache files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Test files
+test/
+tests/
+*.test.*

@@ -1,0 +1,164 @@
+{
+  "field_mappings": {
+    "MAHKEME": {
+      "alan_adi": "Mahkeme Adı",
+      "placeholder": "İSTANBUL ADLİYESİ",
+      "field_type": "text"
+    },
+    "mahkeme_yer": {
+      "alan_adi": "Mahkeme Yeri",
+      "placeholder": "ÇORUM",
+      "field_type": "text"
+    },
+    "Dosya No": {
+      "alan_adi": "Dosya Numarası",
+      "placeholder": "2024/12345",
+      "field_type": "text"
+    },
+    "dosya_no": {
+      "alan_adi": "Dosya Numarası",
+      "placeholder": "2024/12345",
+      "field_type": "text"
+    },
+    "Taraf Sıfatı": {
+      "alan_adi": "Taraf Sıfatı",
+      "placeholder": "DAVACI/DAVALI",
+      "field_type": "text"
+    },
+    "taraf_sifati": {
+      "alan_adi": "Taraf Sıfatı",
+      "placeholder": "DAVACI/DAVALI",
+      "field_type": "text"
+    },
+    "Taraf Adı": {
+      "alan_adi": "Taraf Adı Soyadı/Unvanı",
+      "placeholder": "Ahmet YILMAZ veya ABC Ticaret A.Ş.",
+      "field_type": "text"
+    },
+    "taraf_adi": {
+      "alan_adi": "Taraf Adı Soyadı/Unvanı",
+      "placeholder": "Ahmet YILMAZ veya ABC Ticaret A.Ş.",
+      "field_type": "text"
+    },
+    "Vekil Sıfatı": {
+      "alan_adi": "Vekil Sıfatı",
+      "placeholder": "VEKİLİ",
+      "field_type": "text"
+    },
+    "vekil_sifati": {
+      "alan_adi": "Vekil Sıfatı",
+      "placeholder": "VEKİLİ",
+      "field_type": "text"
+    },
+    "Vekil": {
+      "alan_adi": "Vekil Adı Soyadı",
+      "placeholder": "Av. Mehmet KAYA",
+      "field_type": "text"
+    },
+    "vekil": {
+      "alan_adi": "Vekil Adı Soyadı",
+      "placeholder": "Av. Mehmet KAYA",
+      "field_type": "text"
+    },
+    "Konu": {
+      "alan_adi": "Dava/Talep Konusu",
+      "placeholder": "Tazminat Talebi",
+      "field_type": "text"
+    },
+    "konu": {
+      "alan_adi": "Dava/Talep Konusu",
+      "placeholder": "Tazminat Talebi",
+      "field_type": "text"
+    },
+    "İmza Sıfatı": {
+      "alan_adi": "İmzalayan Sıfatı",
+      "placeholder": "DAVACI VEKİLİ",
+      "field_type": "text"
+    },
+    "imza_sifati": {
+      "alan_adi": "İmzalayan Sıfatı",
+      "placeholder": "DAVACI VEKİLİ",
+      "field_type": "text"
+    },
+    "İmzalayan": {
+      "alan_adi": "İmzalayan Kişi",
+      "placeholder": "Av. Mehmet KAYA",
+      "field_type": "text"
+    },
+    "imzalayan": {
+      "alan_adi": "İmzalayan Kişi",
+      "placeholder": "Av. Mehmet KAYA",
+      "field_type": "text"
+    },
+    "tarih_bugun": {
+      "alan_adi": "Bugünün Tarihi",
+      "placeholder": "Otomatik doldurulacak",
+      "field_type": "special",
+      "handler": "get_tarih_bugun"
+    },
+    "tarih_yarin": {
+      "alan_adi": "Yarının Tarihi",
+      "placeholder": "Otomatik doldurulacak",
+      "field_type": "special",
+      "handler": "get_tarih_yarin"
+    },
+    "tarih_dun": {
+      "alan_adi": "Dünün Tarihi",
+      "placeholder": "Otomatik doldurulacak",
+      "field_type": "special",
+      "handler": "get_tarih_dun"
+    },
+    "tarih": {
+      "alan_adi": "Tarih",
+      "placeholder": "GG/AA/YYYY",
+      "field_type": "date"
+    },
+    "saat": {
+      "alan_adi": "Saat",
+      "placeholder": "SS:DD",
+      "field_type": "time"
+    },
+    "tc_kimlik_no": {
+      "alan_adi": "T.C. Kimlik No",
+      "placeholder": "12345678901",
+      "field_type": "number",
+      "max_length": 11
+    },
+    "telefon": {
+      "alan_adi": "Telefon Numarası",
+      "placeholder": "0555 123 45 67",
+      "field_type": "phone"
+    },
+    "eposta": {
+      "alan_adi": "E-posta Adresi",
+      "placeholder": "ornek@email.com",
+      "field_type": "email"
+    },
+    "adres": {
+      "alan_adi": "Adres",
+      "placeholder": "Mahalle, Sokak, No, İlçe/İL",
+      "field_type": "multiline"
+    },
+    "aciklama": {
+      "alan_adi": "Açıklama",
+      "placeholder": "Detaylı açıklamanızı buraya yazınız...",
+      "field_type": "multiline"
+    },
+    "talep": {
+      "alan_adi": "Talep",
+      "placeholder": "Talebinizi buraya yazınız...",
+      "field_type": "multiline"
+    }
+  },
+  "special_handlers": {
+    "get_tarih_bugun": {
+      "description": "Bugünün tarihini DD/MM/YYYY formatında döndürür"
+    },
+    "get_tarih_yarin": {
+      "description": "Yarının tarihini DD/MM/YYYY formatında döndürür"
+    },
+    "get_tarih_dun": {
+      "description": "Dünün tarihini DD/MM/YYYY formatında döndürür"
+    }
+  }
+}

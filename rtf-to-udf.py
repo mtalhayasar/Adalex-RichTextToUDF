@@ -5,11 +5,12 @@ import tempfile
 import os
 from PySide6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, 
                                QTextEdit, QPushButton, QLabel, QFileDialog, 
-                               QMessageBox, QSplitter)
+                               QMessageBox, QSplitter, QMainWindow, QStackedWidget,
+                               QMenuBar)
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QTextDocument, QTextCursor, QFont, QTextListFormat, QPixmap, QIcon
 import xml.etree.ElementTree as ET
-from xml.sax.saxutils import escape
+from sablon_editor import TemplateEditorWidget
 
 
 def resource_path(relative_path):
@@ -24,11 +25,11 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 
-class RichTextToUDFConverter(QWidget):
+class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("AdaLex UDF Dönüştürücüsü")
-        self.setGeometry(100, 100, 900, 500)
+        self.setGeometry(100, 100, 900, 600)
         
         # Uygulama ikonu ayarla
         logo_icon_path = resource_path('icons/solo-logo-32.png')
@@ -36,6 +37,108 @@ class RichTextToUDFConverter(QWidget):
             self.setWindowIcon(QIcon(logo_icon_path))
         
         self.init_ui()
+        self.create_menu()
+    
+    def create_menu(self):
+        menubar = self.menuBar()
+        
+        # İşlemler menüsü
+        operations_menu = menubar.addMenu('İşlemler')
+        
+        # Metin dönüştürme
+        text_convert_action = operations_menu.addAction('📝 Metin → UDF Dönüştür')
+        text_convert_action.triggered.connect(self.show_text_converter)
+        
+        # Şablon düzenleyici
+        template_editor_action = operations_menu.addAction('📋 Şablon Düzenleyici')
+        template_editor_action.triggered.connect(self.show_template_editor)
+        
+        operations_menu.addSeparator()
+        
+        # Çıkış
+        exit_action = operations_menu.addAction('Çıkış')
+        exit_action.triggered.connect(self.close)
+        
+        # Yardım menüsü
+        help_menu = menubar.addMenu('Yardım')
+        about_action = help_menu.addAction('Hakkında')
+        about_action.triggered.connect(self.show_about)
+    
+    def init_ui(self):
+        # Ana widget
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        
+        # Stacked widget for multiple pages
+        self.stacked_widget = QStackedWidget()
+        
+        # Metin dönüştürücü sayfası
+        self.text_converter = RichTextToUDFConverter()
+        self.stacked_widget.addWidget(self.text_converter)
+        
+        # Şablon düzenleyici sayfası
+        self.template_editor = TemplateEditorWidget()
+        self.template_editor.closed.connect(self.show_text_converter)
+        self.stacked_widget.addWidget(self.template_editor)
+        
+        # Ana layout
+        main_layout = QVBoxLayout()
+        main_layout.addWidget(self.stacked_widget)
+        central_widget.setLayout(main_layout)
+        
+        # Varsayılan olarak metin dönüştürücüyü göster
+        self.show_text_converter()
+    
+    def show_text_converter(self):
+        self.stacked_widget.setCurrentWidget(self.text_converter)
+        self.setWindowTitle("AdaLex UDF Dönüştürücü - Metin Dönüştürme")
+    
+    def show_template_editor(self):
+        self.stacked_widget.setCurrentWidget(self.template_editor)
+        self.setWindowTitle("AdaLex UDF Dönüştürücü - Şablon Düzenleyici")
+    
+    def show_about(self):
+        QMessageBox.information(self, "Hakkında",
+            "AdaLex UDF Dönüştürücü\n\n"
+            "Sürüm: 2.0\n\n"
+            "Özellikler:\n"
+            "• Zengin metin → UDF dönüştürme\n"
+            "• USF şablon düzenleme\n\n"
+            "© 2024 AdaLex")
+
+
+class RichTextToUDFConverter(QWidget):
+    DEFAULT_PAGE_PROPERTIES = {
+        'mediaSizeName': '1',
+        'leftMargin': '42.525000000000006',
+        'rightMargin': '42.525000000000006',
+        'topMargin': '42.525000000000006',
+        'bottomMargin': '42.52500000000006',
+        'paperOrientation': '1',
+        'headerFOffset': '20.0',
+        'footerFOffset': '20.0'
+    }
+
+    def __init__(self):
+        super().__init__()
+        self.page_properties = self.load_template_properties()
+        self.init_ui()
+
+    def load_template_properties(self):
+        """Sablon dosyasindan sayfa ozelliklerini yukle"""
+        template_path = resource_path(os.path.join('sablonlar', 'content.xml'))
+        try:
+            if os.path.exists(template_path):
+                tree = ET.parse(template_path)
+                root = tree.getroot()
+                props = root.find('properties')
+                if props is not None:
+                    page_format = props.find('pageFormat')
+                    if page_format is not None:
+                        return dict(page_format.attrib)
+        except Exception:
+            pass
+        return dict(self.DEFAULT_PAGE_PROPERTIES)
     
     def init_ui(self):
         layout = QVBoxLayout()
@@ -334,6 +437,13 @@ class RichTextToUDFConverter(QWidget):
         # Text içindeki kalan özel karakterleri temizle (varsa)
         text_content = text_content.replace('\u000B', '\n')  # Vertical Tab -> Normal newline
         text_content = text_content.replace('\u000C', '\n')  # Form Feed -> Normal newline
+
+        # Tipografik karakterleri standart karakterlere dönüştür
+        text_content = text_content.replace('\u2013', '-')   # En dash (–) -> Normal tire
+        text_content = text_content.replace('\u201C', '"')   # Sol çift tırnak (") -> Normal tırnak
+        text_content = text_content.replace('\u201D', '"')   # Sağ çift tırnak (") -> Normal tırnak
+        text_content = text_content.replace('\u2019', "'")   # Sağ tek tırnak (') -> Normal kesme işareti
+        text_content = text_content.replace('\u2018', "'")   # Sol tek tırnak (') -> Normal kesme işareti
         
         # Offset'leri yeniden hesapla
         paragraphs = self.recalculate_paragraph_offsets(text_content, paragraphs)
@@ -369,76 +479,6 @@ class RichTextToUDFConverter(QWidget):
         return paragraphs
     
     def create_udf_xml(self, text_content, paragraphs):
-        # XML root element
-        root = ET.Element("template", format_id="1.8")
-        
-        # Content element (CDATA)
-        content_elem = ET.SubElement(root, "content")
-        content_elem.text = text_content
-        
-        # Properties element (sayfa formatı)
-        properties = ET.SubElement(root, "properties")
-        properties.set("mediaSizeName", "1")
-        properties.set("leftMargin", "42.525000000000006")
-        properties.set("rightMargin", "42.525000000000006")
-        properties.set("topMargin", "42.525000000000006")
-        properties.set("bottomMargin", "42.52500000000006")
-        properties.set("paperOrientation", "1")
-        properties.set("headerFOffset", "20.0")
-        properties.set("footerFOffset", "20.0")
-        
-        # Elements section
-        elements = ET.SubElement(root, "elements", resolver="hvl-default")
-        
-        # Her paragraph için element oluştur
-        for para_info in paragraphs:
-            paragraph_elem = ET.SubElement(elements, "paragraph")
-            
-            # Alignment ayarla - ornek.xml'deki gibi
-            alignment = para_info.get('alignment', Qt.AlignLeft)
-            if alignment == Qt.AlignCenter:
-                paragraph_elem.set("Alignment", "1")
-            elif alignment == Qt.AlignRight:
-                paragraph_elem.set("Alignment", "2")
-            elif alignment == Qt.AlignJustify:
-                paragraph_elem.set("Alignment", "3")
-            else:
-                # Varsayılan olarak justify (3) yap
-                paragraph_elem.set("Alignment", "3")
-            
-            # Content elementları ekle
-            for content_info in para_info['content_elements']:
-                content_elem = ET.SubElement(paragraph_elem, "content")
-                content_elem.set("startOffset", str(content_info['startOffset']))
-                content_elem.set("length", str(content_info['length']))
-                
-                if content_info['bold']:
-                    content_elem.set("bold", "true")
-                if content_info['italic']:
-                    content_elem.set("italic", "true")
-                if content_info['underline']:
-                    content_elem.set("underline", "true")
-        
-        # Styles section
-        styles = ET.SubElement(root, "styles")
-        
-        # Default style
-        default_style = ET.SubElement(styles, "style", name="default")
-        default_style.set("description", "Geçerli")
-        default_style.set("family", "Dialog")
-        default_style.set("size", "12")
-        default_style.set("bold", "false")
-        default_style.set("italic", "false")
-        default_style.set("foreground", "-13421773")
-        default_style.set("FONT_ATTRIBUTE_KEY", "javax.swing.plaf.FontUIResource[family=Dialog,name=Dialog,style=plain,size=12]")
-        
-        # HVL default style
-        hvl_style = ET.SubElement(styles, "style", name="hvl-default")
-        hvl_style.set("family", "Times New Roman")
-        hvl_style.set("size", "12")
-        hvl_style.set("description", "Gövde")
-        
-        # XML'i ornek.xml formatına uygun şekilde manuel oluştur
         xml_lines = []
         xml_lines.append('<?xml version="1.0" encoding="UTF-8" ?> ')
         xml_lines.append('')
@@ -447,16 +487,11 @@ class RichTextToUDFConverter(QWidget):
         # CDATA content - satır satır koru
         xml_lines.append(f'<content><![CDATA[{text_content}]]></content>')
         
-        # Properties - pageFormat wrapper ile
+        # Properties - sablondan okunan degerler
         props_line = '<properties><pageFormat'
-        props_line += ' mediaSizeName="1"'
-        props_line += ' leftMargin="42.525000000000006"' 
-        props_line += ' rightMargin="42.525000000000006"'
-        props_line += ' topMargin="42.525000000000006"'
-        props_line += ' bottomMargin="42.52500000000006"'
-        props_line += ' paperOrientation="1"'
-        props_line += ' headerFOffset="20.0"'
-        props_line += ' footerFOffset="20.0" /></properties>'
+        for key, value in self.page_properties.items():
+            props_line += f' {key}="{value}"'
+        props_line += ' /></properties>'
         xml_lines.append(props_line)
         
         # Elements - ornek.xml formatında kompakt
@@ -629,8 +664,8 @@ def main():
         }
     """)
     
-    converter = RichTextToUDFConverter()
-    converter.show()
+    window = MainWindow()
+    window.show()
     
     sys.exit(app.exec())
 

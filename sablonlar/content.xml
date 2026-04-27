@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" ?> 
+
+<template format_id="1.8" >
+<content><![CDATA[MAHKEME
+
+DOSYA NO	: Dosya No
+
+Taraf Sıfatı	: Taraf Adı
+Vekil Sıfatı	: Vekil
+
+KONU	: Konu
+
+AÇIKLAMALAR:
+
+
+
+
+SONUÇ VE TALEP: 
+
+
+İmza Sıfatı
+İmzalayan
+
+]]></content><properties><pageFormat mediaSizeName="1" leftMargin="42.525000000000006" rightMargin="42.525000000000006" topMargin="42.525000000000006" bottomMargin="42.52500000000006" paperOrientation="1" headerFOffset="20.0" footerFOffset="20.0" /></properties>
+<elements resolver="hvl-default" >
+<paragraph Alignment="1"><field fieldName="MAHKEME" fieldType="1" isList="false" isErasable="false" bold="true" startOffset="0" length="7" /><content startOffset="7" length="1" /></paragraph><paragraph><content startOffset="8" length="1" /></paragraph><paragraph><content bold="true" startOffset="9" length="10" /><space startOffset="19" length="1" /><field fieldName="Dosya No" fieldType="1" isList="false" isErasable="false" startOffset="20" length="8" /><content startOffset="28" length="1" /></paragraph><paragraph><content bold="true" startOffset="29" length="1" /></paragraph><paragraph Alignment="3"><field bold="true" fieldName="Taraf Sıfatı" fieldType="1" isList="false" isErasable="false" startOffset="30" length="12" /><content bold="true" startOffset="42" length="2" /><space startOffset="44" length="1" /><field fieldName="Taraf Adı" fieldType="1" isList="false" isErasable="false" startOffset="45" length="9" /><content startOffset="54" length="1" /></paragraph><paragraph Alignment="3"><field bold="true" fieldName="Vekil Sıfatı" fieldType="1" isList="false" isErasable="false" startOffset="55" length="12" /><content bold="true" startOffset="67" length="2" /><space startOffset="69" length="1" /><field fieldName="Vekil" fieldType="1" isList="false" isErasable="false" startOffset="70" length="5" /><content startOffset="75" length="1" /></paragraph><paragraph Alignment="3"><content startOffset="76" length="1" /></paragraph><paragraph Alignment="3"><content bold="true" startOffset="77" length="6" /><space startOffset="83" length="1" /><field fieldName="Konu" fieldType="1" isList="false" isErasable="false" startOffset="84" length="4" /><content startOffset="88" length="1" /></paragraph><paragraph Alignment="3"><content startOffset="89" length="1" /></paragraph><paragraph Alignment="3"><content bold="true" startOffset="90" length="12" /><content startOffset="102" length="1" /></paragraph><paragraph Alignment="3"><content startOffset="103" length="1" /></paragraph><paragraph LeftIndent="0.0" Alignment="3" GroupName="Açıklamalar" RepeatingLabel="false"><content startOffset="104" length="1" /></paragraph><paragraph Alignment="3"><content startOffset="105" length="1" /></paragraph><paragraph Alignment="3"><content startOffset="106" length="1" /></paragraph><paragraph Alignment="3" GroupName="Sonuç ve Talep" RepeatingLabel="false"><content bold="true" startOffset="107" length="15" /><content startOffset="122" length="2" /></paragraph><paragraph><content startOffset="124" length="1" /></paragraph><paragraph Alignment="2"><content bold="true" startOffset="125" length="1" /></paragraph><paragraph Alignment="2"><field fieldName="İmza Sıfatı" fieldType="1" isList="false" isErasable="false" startOffset="126" length="11" /><content startOffset="137" length="1" /></paragraph><paragraph Alignment="2"><field fieldName="İmzalayan" fieldType="1" isList="false" isErasable="false" startOffset="138" length="9" /><content startOffset="147" length="1" /></paragraph><paragraph Alignment="2"><content startOffset="148" length="1" /></paragraph>
+</elements>
+<styles><style name="default" description="Geçerli" family="Dialog" size="12" bold="false" italic="false" FONT_ATTRIBUTE_KEY="javax.swing.plaf.FontUIResource[family=Dialog,name=Dialog,style=plain,size=12]" foreground="-13421773" /><style name="hvl-default" family="Times New Roman" size="12" description="Gövde" /></styles>
+</template>

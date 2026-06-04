@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
+VERSION = "2.1.0"
 import sys
+import re
 import zipfile
 import tempfile
 import os
-from PySide6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, 
-                               QTextEdit, QPushButton, QLabel, QFileDialog, 
-                               QMessageBox, QSplitter, QMainWindow, QStackedWidget,
-                               QMenuBar)
+from PySide6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout,
+                               QTextEdit, QPushButton, QLabel, QFileDialog,
+                               QMessageBox, QMainWindow, QTabWidget)
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QTextDocument, QTextCursor, QFont, QTextListFormat, QPixmap, QIcon
 import xml.etree.ElementTree as ET
@@ -25,99 +26,156 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 
+# cm/mm/in/pt -> px yaklasik donusum carpanlari (96 dpi)
+_UNIT_PX = {'cm': 37.795, 'mm': 3.7795, 'in': 96.0, 'pt': 1.3333}
+
+
+def fix_pasted_html(html):
+    """Word panosundan gelen HTML'i Qt import etmeden ONCE onar.
+
+    Qt'nin HTML alt kumesi iki seyi kaybeder; yapistirma aninda duzeltiriz:
+    1) margin/text-indent/padding birimleri cm/mm/in/pt ise px'e cevir (Qt yalnizca
+       px'i tanir; aksi halde girinti 0 olur).
+    2) 'text-align:justify' iceren acilis etiketine align="justify" ekle (Qt CSS
+       justify'i tanimaz ama align="justify" oznitel/igini tanir).
+    Yalnizca paragraf bicimini onarir; metni DEGISTIRMEZ (offset/length guvenli).
+    """
+    def _conv_decl(m):
+        prop, num, unit = m.group(1), m.group(2), m.group(3).lower()
+        return f"{prop}{float(num) * _UNIT_PX[unit]:.2f}px"
+
+    html = re.sub(
+        r'(?i)((?:margin|text-indent|padding)[\w-]*\s*:\s*)(\d*\.?\d+)\s*(cm|mm|in|pt)\b',
+        _conv_decl, html)
+
+    def _add_justify(m):
+        tag = m.group(0)
+        if re.search(r'text-align\s*:\s*justify', tag, re.I) and not re.search(r'\balign\s*=', tag):
+            return re.sub(r'^<(\w+)', r'<\1 align="justify"', tag, count=1)
+        return tag
+
+    html = re.sub(r'<\w+[^>]*>', _add_justify, html)
+    return html
+
+
+class PasteAwareTextEdit(QTextEdit):
+    """Yapistirilan HTML'i Qt import etmeden once fix_pasted_html ile onaran QTextEdit."""
+
+    def insertFromMimeData(self, source):
+        if source.hasHtml():
+            self.insertHtml(fix_pasted_html(source.html()))
+        else:
+            super().insertFromMimeData(source)
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("AdaLex UDF Dönüştürücüsü")
-        self.setGeometry(100, 100, 900, 600)
-        
+        self.setWindowTitle(f"AdaLex UDF Dönüştürücü v{VERSION}")
+        self.setGeometry(100, 100, 900, 650)
+
         # Uygulama ikonu ayarla
         logo_icon_path = resource_path('icons/solo-logo-32.png')
         if os.path.exists(logo_icon_path):
             self.setWindowIcon(QIcon(logo_icon_path))
-        
+
         self.init_ui()
-        self.create_menu()
-    
-    def create_menu(self):
-        menubar = self.menuBar()
-        
-        # İşlemler menüsü
-        operations_menu = menubar.addMenu('İşlemler')
-        
-        # Metin dönüştürme
-        text_convert_action = operations_menu.addAction('📝 Metin → UDF Dönüştür')
-        text_convert_action.triggered.connect(self.show_text_converter)
-        
-        # Şablon düzenleyici
-        template_editor_action = operations_menu.addAction('📋 Şablon Düzenleyici')
-        template_editor_action.triggered.connect(self.show_template_editor)
-        
-        operations_menu.addSeparator()
-        
-        # Çıkış
-        exit_action = operations_menu.addAction('Çıkış')
-        exit_action.triggered.connect(self.close)
-        
-        # Yardım menüsü
-        help_menu = menubar.addMenu('Yardım')
-        about_action = help_menu.addAction('Hakkında')
-        about_action.triggered.connect(self.show_about)
-    
+
     def init_ui(self):
-        # Ana widget
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        
-        # Stacked widget for multiple pages
-        self.stacked_widget = QStackedWidget()
-        
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        # Üst header bar
+        header = QWidget()
+        header.setFixedHeight(56)
+        header.setStyleSheet("""
+            QWidget {
+                background-color: #ffffff;
+                border-bottom: 1px solid #d1d9e6;
+            }
+        """)
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(16, 0, 16, 0)
+
+        # Logo
+        logo_path = resource_path('logo.png')
+        if os.path.exists(logo_path):
+            logo_label = QLabel()
+            pixmap = QPixmap(logo_path)
+            scaled_pixmap = pixmap.scaled(160, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            logo_label.setPixmap(scaled_pixmap)
+            header_layout.addWidget(logo_label)
+
+        header_layout.addStretch()
+
+        # Versiyon bilgisi
+        version_label = QLabel("v2.1.0")
+        version_label.setStyleSheet("color: #95a5a6; font-size: 11px;")
+        header_layout.addWidget(version_label)
+
+        main_layout.addWidget(header)
+
+        # Tab widget
+        self.tab_widget = QTabWidget()
+        self.tab_widget.setDocumentMode(True)
+        self.tab_widget.setStyleSheet("""
+            QTabWidget::pane {
+                border: none;
+                background-color: #f5f7fa;
+            }
+            QTabBar {
+                background-color: #edf0f5;
+            }
+            QTabBar::tab {
+                background-color: #edf0f5;
+                color: #5a6a7a;
+                padding: 12px 28px;
+                font-size: 13px;
+                font-weight: bold;
+                border: none;
+                border-bottom: 3px solid transparent;
+                min-width: 160px;
+            }
+            QTabBar::tab:selected {
+                background-color: #f5f7fa;
+                color: #1a2332;
+                border-bottom: 3px solid #3498db;
+            }
+            QTabBar::tab:hover:!selected {
+                background-color: #e4e8ee;
+                color: #2c3e50;
+            }
+        """)
+
         # Metin dönüştürücü sayfası
         self.text_converter = RichTextToUDFConverter()
-        self.stacked_widget.addWidget(self.text_converter)
-        
+        self.tab_widget.addTab(self.text_converter, "Metin \u2192 UDF")
+
         # Şablon düzenleyici sayfası
         self.template_editor = TemplateEditorWidget()
-        self.template_editor.closed.connect(self.show_text_converter)
-        self.stacked_widget.addWidget(self.template_editor)
-        
-        # Ana layout
-        main_layout = QVBoxLayout()
-        main_layout.addWidget(self.stacked_widget)
+        self.tab_widget.addTab(self.template_editor, "Şablon Düzenleyici")
+
+        main_layout.addWidget(self.tab_widget)
         central_widget.setLayout(main_layout)
-        
-        # Varsayılan olarak metin dönüştürücüyü göster
-        self.show_text_converter()
-    
-    def show_text_converter(self):
-        self.stacked_widget.setCurrentWidget(self.text_converter)
-        self.setWindowTitle("AdaLex UDF Dönüştürücü - Metin Dönüştürme")
-    
-    def show_template_editor(self):
-        self.stacked_widget.setCurrentWidget(self.template_editor)
-        self.setWindowTitle("AdaLex UDF Dönüştürücü - Şablon Düzenleyici")
-    
-    def show_about(self):
-        QMessageBox.information(self, "Hakkında",
-            "AdaLex UDF Dönüştürücü\n\n"
-            "Sürüm: 2.0\n\n"
-            "Özellikler:\n"
-            "• Zengin metin → UDF dönüştürme\n"
-            "• USF şablon düzenleme\n\n"
-            "© 2024 AdaLex")
 
 
 class RichTextToUDFConverter(QWidget):
     DEFAULT_PAGE_PROPERTIES = {
         'mediaSizeName': '1',
-        'leftMargin': '42.525000000000006',
-        'rightMargin': '42.525000000000006',
-        'topMargin': '42.525000000000006',
-        'bottomMargin': '42.52500000000006',
+        'leftMargin': '56.69291305541992',
+        'rightMargin': '56.69291305541992',
+        'topMargin': '56.69291305541992',
+        'bottomMargin': '56.69291305541992',
         'paperOrientation': '1',
         'headerFOffset': '20.0',
         'footerFOffset': '20.0'
     }
+
+    # UDF sekme duraklari (sablon/edited.udf ile ayni)
+    DEFAULT_TAB_SET = "42.519684:0:0,85.03937:0:0,127.55905:0:0"
 
     def __init__(self):
         super().__init__()
@@ -142,104 +200,106 @@ class RichTextToUDFConverter(QWidget):
     
     def init_ui(self):
         layout = QVBoxLayout()
-        
-        # Üst kısım - Logo ve başlık üst-alt
-        header_layout = QVBoxLayout()
-        header_layout.setAlignment(Qt.AlignLeft)
-        
-        # Logo ekle - daha büyük boyutta
-        logo_path = resource_path('logo.png')
-        if os.path.exists(logo_path):
-            logo_label = QLabel()
-            pixmap = QPixmap(logo_path)
-            # Logo boyutunu büyüt
-            scaled_pixmap = pixmap.scaled(250, 90, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            logo_label.setPixmap(scaled_pixmap)
-            logo_label.setAlignment(Qt.AlignLeft)
-            header_layout.addWidget(logo_label)
-        
-        # Ana başlık - logonun altında
+        layout.setContentsMargins(24, 20, 24, 16)
+        layout.setSpacing(12)
+
+        # Başlık ve açıklama
         title_label = QLabel("Biçimlendirilmiş Metin Dönüştürücüsü")
-        title_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #2c3e50; margin-top: 5px;")
-        header_layout.addWidget(title_label)
-        
-        layout.addLayout(header_layout)
-        
-        # Açıklama metni
-        desc_label = QLabel("Word, Google Docs veya diğer kaynaklardan kopyaladığınız metinleri UDF formatına dönüştürün")
-        desc_label.setStyleSheet("color: #7f8c8d; margin: 5px 0 10px 0;")
+        title_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #1a2332;")
+        layout.addWidget(title_label)
+
+        desc_label = QLabel("Word, Google Docs veya diğer kaynaklardan kopyaladığınız metinleri UDF formatına dönüştürün.")
+        desc_label.setStyleSheet("color: #6b7a8d; font-size: 12px; margin-bottom: 4px;")
         desc_label.setWordWrap(True)
         layout.addWidget(desc_label)
-        
-        # Metin giriş alanı - Tek alan olarak
-        input_label = QLabel("📝 Metninizi Buraya Yapıştırın:")
-        input_label.setStyleSheet("font-weight: bold; font-size: 12px; margin-top: 10px;")
+
+        # Metin giriş alanı
+        input_label = QLabel("Metninizi buraya yapıştırın:")
+        input_label.setStyleSheet("font-weight: 600; font-size: 13px; color: #2c3e50;")
         layout.addWidget(input_label)
-        
-        self.input_text = QTextEdit()
+
+        self.input_text = PasteAwareTextEdit()
         self.input_text.setPlaceholderText("Word, Google Docs veya başka bir kaynaktan kopyaladığınız biçimlendirilmiş metni buraya yapıştırın...")
-        self.input_text.setMinimumHeight(250)
+        self.input_text.setMinimumHeight(280)
+        self.input_text.setStyleSheet("""
+            QTextEdit {
+                border: 1px solid #d1d9e6;
+                border-radius: 8px;
+                padding: 12px;
+                font-size: 12px;
+                background-color: #ffffff;
+            }
+            QTextEdit:focus {
+                border: 2px solid #3498db;
+            }
+        """)
         layout.addWidget(self.input_text)
-        
-        # XML önizleme için gizli alan (arka planda kullanılacak)
+
+        # XML önizleme için gizli alan
         self.output_text = QTextEdit()
-        self.output_text.setVisible(False)  # Kullanıcıya gösterme
-        
+        self.output_text.setVisible(False)
+
         # Alt butonlar
         button_layout = QHBoxLayout()
+        button_layout.setSpacing(12)
         button_layout.addStretch()
-        
-        # Tek buton: Dönüştür ve Kaydet
-        self.save_button = QPushButton("💾 UDF Olarak Kaydet")
+
+        self.save_button = QPushButton("UDF Olarak Kaydet")
         self.save_button.clicked.connect(self.convert_and_save)
+        self.save_button.setCursor(Qt.PointingHandCursor)
         self.save_button.setStyleSheet("""
             QPushButton {
                 background-color: #27ae60;
                 color: white;
                 font-weight: bold;
-                padding: 10px 30px;
-                font-size: 14px;
-                border-radius: 5px;
+                padding: 10px 32px;
+                font-size: 13px;
+                border-radius: 8px;
                 border: none;
             }
             QPushButton:hover {
-                background-color: #229954;
+                background-color: #219a52;
             }
             QPushButton:pressed {
                 background-color: #1e8449;
             }
         """)
-        
-        self.clear_button = QPushButton("🗑️ Temizle")
+
+        self.clear_button = QPushButton("Temizle")
         self.clear_button.clicked.connect(self.clear_all)
+        self.clear_button.setCursor(Qt.PointingHandCursor)
         self.clear_button.setStyleSheet("""
             QPushButton {
-                background-color: #e74c3c;
-                color: white;
-                padding: 10px 20px;
+                background-color: transparent;
+                color: #e74c3c;
+                font-weight: bold;
+                padding: 10px 24px;
                 font-size: 13px;
-                border-radius: 5px;
-                border: none;
+                border-radius: 8px;
+                border: 1px solid #e74c3c;
             }
             QPushButton:hover {
-                background-color: #c0392b;
+                background-color: #fdf0ef;
+            }
+            QPushButton:pressed {
+                background-color: #f9e0de;
             }
         """)
-        
+
         button_layout.addWidget(self.save_button)
         button_layout.addWidget(self.clear_button)
         button_layout.addStretch()
-        
+
         layout.addLayout(button_layout)
-        
+
         # Durum çubuğu
         self.status_label = QLabel("")
-        self.status_label.setStyleSheet("color: #27ae60; margin: 10px; font-size: 12px;")
+        self.status_label.setStyleSheet("color: #27ae60; font-size: 12px;")
         self.status_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.status_label)
-        
+
         self.setLayout(layout)
-        
+
         # XML içeriğini saklamak için
         self.generated_xml = ""
     
@@ -291,10 +351,19 @@ class RichTextToUDFConverter(QWidget):
         block = doc.begin()
         list_id_counter = 1
         current_lists = {}  # Format -> ListId mapping
-        
+        # Manuel "1)" / "a)" liste otomasyonu icin gruplama durumu
+        num_list_id = None
+        num_last = 0
+        char_list_id = None
+        char_last = 0
+
         while block.isValid():
             block_format = block.blockFormat()
             text_list = block.textList()
+
+            # Paragraf girintisi (round-trip'te punto olarak korunur)
+            left_margin = round(block_format.leftMargin())
+            right_margin = round(block_format.rightMargin())
             
             # Liste bilgilerini hazırla (varsa)
             list_info = None
@@ -369,19 +438,62 @@ class RichTextToUDFConverter(QWidget):
             
             # Her satır için ayrı paragraf oluştur
             for line_idx, line_text in enumerate(lines):
+                # Manuel "1)" / "a)" liste tespiti (yalnizca Qt listesi yoksa)
+                manual_list_info = None
+                strip_count = 0
+                if not text_list:
+                    m_num = re.match(r'(\d+)\)\s', line_text)
+                    m_chr = re.match(r'([a-zçğıöşü])\)\s', line_text)
+                    if m_num:
+                        n = int(m_num.group(1))
+                        if num_list_id is None or n == 1 or n != num_last + 1:
+                            list_id_counter += 1
+                            num_list_id = list_id_counter
+                        num_last = n
+                        # Numara gelince harf alt-listesi sifirlanir
+                        char_list_id = None
+                        char_last = 0
+                        manual_list_info = {
+                            'type': 'numbered',
+                            'number_type': 'NUMBER_TYPE_NUMBER_PARANTHESE',
+                            'level': 1,
+                            'list_id': num_list_id,
+                            'left_indent': 25.0,
+                        }
+                        strip_count = m_num.end()
+                    elif m_chr:
+                        ch = m_chr.group(1)
+                        ordv = (ord(ch) - ord('a') + 1) if 'a' <= ch <= 'z' else None
+                        if char_list_id is None or ch == 'a' or ordv is None or ordv != char_last + 1:
+                            list_id_counter += 1
+                            char_list_id = list_id_counter
+                        char_last = ordv if ordv is not None else char_last + 1
+                        manual_list_info = {
+                            'type': 'numbered',
+                            'number_type': 'NUMBER_TYPE_CHAR_SMALL_PARANTHESE',
+                            'level': 1,
+                            'list_id': char_list_id,
+                            'left_indent': 25.0,
+                        }
+                        strip_count = m_chr.end()
+
                 paragraph_info = {
                     'alignment': block_format.alignment(),
+                    'left_indent': left_margin,
+                    'right_indent': right_margin,
                     'content_elements': [],
-                    'list_info': list_info if line_idx == 0 else None  # Liste bilgisi sadece ilk satıra
+                    # Qt listesi (yalnizca ilk satir) veya manuel tespit edilen liste
+                    'list_info': (list_info if line_idx == 0 else None) or manual_list_info
                 }
-                
+
                 # Bu satır için fragment'ları hesapla
                 line_start = sum(len(lines[i]) + 1 for i in range(line_idx))  # +1 separator için
                 if line_idx == 0:
                     line_start = 0
                 line_end = line_start + len(line_text)
-                
+
                 # Fragment'ları bu satıra dağıt
+                remaining_strip = strip_count  # ayiklanacak liste oneki ("1) ") karakter sayisi
                 fragment_pos = 0
                 for frag in block_fragments:
                     frag_text = frag['text']
@@ -400,9 +512,18 @@ class RichTextToUDFConverter(QWidget):
                             # Line separator'ları temizle
                             text_piece = text_piece.replace('\u2028', '').replace('\u2029', '')
                             
+                            # Liste onekini ("1) " / "a) ") metinden ayikla (offset/length senkron)
+                            if remaining_strip > 0 and text_piece:
+                                take = min(remaining_strip, len(text_piece))
+                                text_piece = text_piece[take:]
+                                remaining_strip -= take
+
+                            # Cok bosluklu (eski sekme) hizalamayi gercek sekmeye cevir
+                            text_piece = re.sub(r' {2,}', '\t', text_piece)
+
                             if text_piece:  # Boş değilse ekle
                                 text_content += text_piece
-                                
+
                                 paragraph_info['content_elements'].append({
                                     'startOffset': current_offset,
                                     'length': len(text_piece),
@@ -500,37 +621,49 @@ class RichTextToUDFConverter(QWidget):
         # Her paragraph'ı tek satırda oluştur
         for para_info in paragraphs:
             para_line = '<paragraph'
-            
+
+            # Sekme duraklari - tum paragraflarda (offset etkilemez)
+            para_line += f' TabSet="{self.DEFAULT_TAB_SET}"'
+
             # Liste bilgilerini ekle
             list_info = para_info.get('list_info')
+            left_indent_val = para_info.get('left_indent', 0)
             if list_info:
                 if list_info['type'] == 'numbered':
-                    # Numaralı liste
-                    para_line += f' NumberType="NUMBER_TYPE_NUMBER_TRE"'
-                    para_line += f' SecListTypeLevel1="NUMBER_TYPE_NUMBER_TRE"'
+                    # Numaralı/harfli liste - numara tipi liste bilgisinden gelir
+                    num_type = list_info.get('number_type', 'NUMBER_TYPE_NUMBER_PARANTHESE')
+                    para_line += f' NumberType="{num_type}"'
+                    para_line += f' SecListTypeLevel1="{num_type}"'
                     para_line += f' ListLevel="{list_info["level"]}"'
                     para_line += f' Numbered="true"'
                     para_line += f' ListId="{list_info["list_id"]}"'
-                    para_line += f' LeftIndent="{list_info["left_indent"]}"'
-                    
+                    left_indent_val = list_info['left_indent']
+
                 elif list_info['type'] == 'bulleted':
                     # Madde işaretli liste
                     para_line += f' Bulleted="true"'
                     para_line += f' BulletType="BULLET_TYPE_ELLIPSE"'
                     para_line += f' ListLevel="{list_info["level"]}"'
                     para_line += f' ListId="{list_info["list_id"]}"'
-                    para_line += f' LeftIndent="{list_info["left_indent"]}"'
-            
-            # Alignment ekle - sadece center, right, justify için
-            alignment = para_info.get('alignment', Qt.AlignLeft)
-            if alignment == Qt.AlignCenter:
+                    left_indent_val = list_info['left_indent']
+
+            # Girinti - liste varsa listeden, yoksa blok girintisinden (tek LeftIndent)
+            if left_indent_val:
+                para_line += f' LeftIndent="{left_indent_val}"'
+            right_indent_val = para_info.get('right_indent', 0)
+            if right_indent_val:
+                para_line += f' RightIndent="{right_indent_val}"'
+
+            # Alignment - birlesik Qt bayraklarini yatay maske ile coz
+            h = int(para_info.get('alignment', Qt.AlignLeft)) & int(Qt.AlignHorizontal_Mask)
+            if h & int(Qt.AlignHCenter):
                 para_line += ' Alignment="1"'
-            elif alignment == Qt.AlignRight:
+            elif h & int(Qt.AlignRight):
                 para_line += ' Alignment="2"'
-            elif alignment == Qt.AlignJustify:
+            elif h & int(Qt.AlignJustify):
                 para_line += ' Alignment="3"'
-            # Left alignment için Alignment attribute ekleme
-            
+            # Sol (varsayilan) hizalama icin oznitelik eklenmez
+
             para_line += '>'
             
             # Content elementları aynı satıra ekle
@@ -555,7 +688,12 @@ class RichTextToUDFConverter(QWidget):
             xml_lines.append(para_line)
         
         xml_lines.append('</elements>')
-        
+
+        # Sekme uzunlugu tanimi (UDF editorunun sekme duraklarini tanimasi icin)
+        xml_lines.append('<tabLength length="1.5" resolver="hvl-default" >')
+        xml_lines.append('')
+        xml_lines.append('</tabLength>')
+
         # Styles - compare1.xml formatında (foreground sonda)
         styles_line = '<styles>'
         styles_line += '<style name="default" description="Geçerli" family="Dialog" size="12" bold="false" italic="false" FONT_ATTRIBUTE_KEY="javax.swing.plaf.FontUIResource[family=Dialog,name=Dialog,style=plain,size=12]" foreground="-13421773" />'
@@ -638,29 +776,75 @@ def main():
     
     # Uygulama stilini ayarla
     app.setStyleSheet("""
-        QTextEdit {
-            border: 1px solid #cccccc;
-            border-radius: 4px;
-            padding: 5px;
+        * {
             font-family: 'Segoe UI', Arial, sans-serif;
-            font-size: 11px;
+        }
+        QMainWindow {
+            background-color: #f5f7fa;
+        }
+        QTextEdit, QPlainTextEdit {
+            border: 1px solid #d1d9e6;
+            border-radius: 6px;
+            padding: 8px;
+            font-size: 12px;
+            background-color: #ffffff;
+            selection-background-color: #3498db;
+        }
+        QTextEdit:focus, QPlainTextEdit:focus {
+            border: 2px solid #3498db;
+        }
+        QLineEdit {
+            border: 1px solid #d1d9e6;
+            border-radius: 6px;
+            padding: 8px 10px;
+            font-size: 12px;
+            background-color: #ffffff;
+            min-height: 20px;
+        }
+        QLineEdit:focus {
+            border: 2px solid #3498db;
         }
         QPushButton {
             background-color: #f0f0f0;
-            border: 1px solid #cccccc;
-            border-radius: 4px;
+            border: 1px solid #d1d9e6;
+            border-radius: 6px;
+            padding: 8px 16px;
+            font-size: 12px;
             min-width: 100px;
-            min-height: 30px;
+            min-height: 32px;
         }
         QPushButton:hover {
-            background-color: #e0e0e0;
+            background-color: #e4e8ee;
         }
         QPushButton:pressed {
-            background-color: #d0d0d0;
+            background-color: #d0d5dd;
         }
         QPushButton:disabled {
             background-color: #f5f5f5;
-            color: #999999;
+            color: #aaaaaa;
+        }
+        QScrollArea {
+            border: none;
+            background-color: transparent;
+        }
+        QGroupBox {
+            font-weight: bold;
+            border: 1px solid #d1d9e6;
+            border-radius: 8px;
+            margin-top: 14px;
+            padding: 16px 12px 12px 12px;
+            background-color: #ffffff;
+        }
+        QGroupBox::title {
+            subcontrol-origin: margin;
+            subcontrol-position: top left;
+            padding: 2px 10px;
+            background-color: #f5f7fa;
+            color: #2c3e50;
+            border-radius: 4px;
+        }
+        QLabel {
+            color: #2c3e50;
         }
     """)
     

@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QScrollArea,
                                QLabel, QPushButton, QLineEdit, QPlainTextEdit,
                                QFileDialog, QMessageBox, QFormLayout, QGroupBox)
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QGuiApplication
 import xml.etree.ElementTree as ET
 import json
 from datetime import datetime, timedelta
@@ -43,7 +43,7 @@ class TemplateEditorWidget(QWidget):
         self.xml_tree = None
         self.content_cdata = ""
         self.fields = []
-        self.field_inputs = []
+        self.field_widgets = {}
         self.temp_dir = None
         self.field_config = {}
         
@@ -92,92 +92,146 @@ class TemplateEditorWidget(QWidget):
         
     def init_ui(self):
         layout = QVBoxLayout()
-        layout.setSpacing(10)
-        
+        layout.setContentsMargins(24, 20, 24, 16)
+        layout.setSpacing(12)
+
         # Başlık
-        title = QLabel("📋 UYAP Şablon Düzenleyici")
-        title.setStyleSheet("font-size: 18px; font-weight: bold; color: #2c3e50; padding: 10px;")
-        title.setAlignment(Qt.AlignCenter)
+        title = QLabel("UYAP Şablon Düzenleyici")
+        title.setStyleSheet("font-size: 18px; font-weight: bold; color: #1a2332;")
         layout.addWidget(title)
-        
+
         # Açıklama
-        desc = QLabel("USF şablon dosyasını seçin ve alanları doldurun")
-        desc.setStyleSheet("color: #7f8c8d; padding: 5px;")
-        desc.setAlignment(Qt.AlignCenter)
+        desc = QLabel("USF şablon dosyasını seçin, alanları doldurun ve UDF olarak kaydedin.")
+        desc.setStyleSheet("color: #6b7a8d; font-size: 12px; margin-bottom: 4px;")
+        desc.setWordWrap(True)
         layout.addWidget(desc)
-        
-        # Dosya seçim butonu
-        self.select_button = QPushButton("📂 USF Dosyası Seç")
+
+        # Dosya seçim alanı
+        file_row = QHBoxLayout()
+        file_row.setSpacing(10)
+
+        self.select_button = QPushButton("USF Dosyası Seç")
         self.select_button.clicked.connect(self.select_usf_file)
+        self.select_button.setCursor(Qt.PointingHandCursor)
         self.select_button.setStyleSheet("""
             QPushButton {
                 background-color: #3498db;
                 color: white;
                 font-weight: bold;
-                padding: 10px;
-                font-size: 14px;
-                border-radius: 5px;
+                padding: 10px 24px;
+                font-size: 13px;
+                border-radius: 8px;
+                border: none;
             }
             QPushButton:hover {
                 background-color: #2980b9;
             }
         """)
-        layout.addWidget(self.select_button)
-        
-        # Dosya adı etiketi
-        self.file_label = QLabel("")
-        self.file_label.setStyleSheet("color: #27ae60; font-weight: bold; padding: 5px;")
-        self.file_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self.file_label)
-        
+        file_row.addWidget(self.select_button)
+
+        self.file_label = QLabel("Henüz dosya seçilmedi")
+        self.file_label.setStyleSheet("color: #95a5a6; font-size: 12px;")
+        file_row.addWidget(self.file_label, 1)
+
+        layout.addLayout(file_row)
+
         # Scroll area for fields
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("QScrollArea { border: 1px solid #bdc3c7; border-radius: 5px; }")
-        
-        # Fields container
+        scroll.setStyleSheet("""
+            QScrollArea {
+                border: 1px solid #d1d9e6;
+                border-radius: 8px;
+                background-color: #ffffff;
+            }
+        """)
+
         self.fields_widget = QWidget()
+        self.fields_widget.setStyleSheet("background-color: #ffffff;")
         self.fields_layout = QVBoxLayout()
+        self.fields_layout.setContentsMargins(16, 16, 16, 16)
         self.fields_widget.setLayout(self.fields_layout)
+
+        # Boş durum mesajı
+        self.empty_label = QLabel("Alanları görmek için bir USF dosyası seçin.")
+        self.empty_label.setStyleSheet("color: #b0bec5; font-size: 13px; padding: 40px;")
+        self.empty_label.setAlignment(Qt.AlignCenter)
+        self.fields_layout.addWidget(self.empty_label)
+
         scroll.setWidget(self.fields_widget)
-        
         layout.addWidget(scroll, 1)
-        
+
         # Alt butonlar
         button_layout = QHBoxLayout()
+        button_layout.setSpacing(12)
         button_layout.addStretch()
-        
-        # Kaydet butonu
-        self.save_button = QPushButton("💾 UDF Olarak Kaydet")
+
+        json_button_style = """
+            QPushButton {
+                background-color: #8e44ad;
+                color: white;
+                font-weight: bold;
+                padding: 10px 20px;
+                font-size: 13px;
+                border-radius: 8px;
+                border: none;
+            }
+            QPushButton:hover:enabled {
+                background-color: #7d3c98;
+            }
+            QPushButton:disabled {
+                background-color: #c8d6c8;
+                color: #ffffff;
+            }
+        """
+
+        self.json_export_button = QPushButton("JSON Dışa Aktar")
+        self.json_export_button.clicked.connect(self.export_fields_as_json)
+        self.json_export_button.setEnabled(False)
+        self.json_export_button.setCursor(Qt.PointingHandCursor)
+        self.json_export_button.setStyleSheet(json_button_style)
+        button_layout.addWidget(self.json_export_button)
+
+        self.json_import_button = QPushButton("JSON İçe Aktar")
+        self.json_import_button.clicked.connect(self.import_fields_from_json)
+        self.json_import_button.setEnabled(False)
+        self.json_import_button.setCursor(Qt.PointingHandCursor)
+        self.json_import_button.setStyleSheet(json_button_style)
+        button_layout.addWidget(self.json_import_button)
+
+        self.save_button = QPushButton("UDF Olarak Kaydet")
         self.save_button.clicked.connect(self.save_as_udf)
         self.save_button.setEnabled(False)
+        self.save_button.setCursor(Qt.PointingHandCursor)
         self.save_button.setStyleSheet("""
             QPushButton {
                 background-color: #27ae60;
                 color: white;
                 font-weight: bold;
-                padding: 10px 30px;
-                font-size: 14px;
-                border-radius: 5px;
+                padding: 10px 32px;
+                font-size: 13px;
+                border-radius: 8px;
+                border: none;
             }
             QPushButton:hover:enabled {
-                background-color: #229954;
+                background-color: #219a52;
             }
             QPushButton:disabled {
-                background-color: #95a5a6;
+                background-color: #c8d6c8;
+                color: #ffffff;
             }
         """)
         button_layout.addWidget(self.save_button)
-        
         button_layout.addStretch()
+
         layout.addLayout(button_layout)
-        
+
         # Durum etiketi
         self.status_label = QLabel("")
-        self.status_label.setStyleSheet("padding: 5px;")
+        self.status_label.setStyleSheet("font-size: 12px;")
         self.status_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.status_label)
-        
+
         self.setLayout(layout)
         
     def select_usf_file(self):
@@ -192,7 +246,8 @@ class TemplateEditorWidget(QWidget):
             return
             
         self.usf_path = file_path
-        self.file_label.setText(f"📄 {os.path.basename(file_path)}")
+        self.file_label.setText(os.path.basename(file_path))
+        self.file_label.setStyleSheet("color: #27ae60; font-weight: bold; font-size: 12px;")
         self.load_usf_file()
         
     def load_usf_file(self):
@@ -256,6 +311,8 @@ class TemplateEditorWidget(QWidget):
             # GUI'yi oluştur
             self.create_field_inputs()
             self.save_button.setEnabled(True)
+            self.json_export_button.setEnabled(True)
+            self.json_import_button.setEnabled(True)
             
             self.status_label.setText(f"✅ {len(self.fields)} alan bulundu")
             self.status_label.setStyleSheet("color: #27ae60;")
@@ -266,26 +323,39 @@ class TemplateEditorWidget(QWidget):
             self.status_label.setStyleSheet("color: #e74c3c;")
             
     def create_field_inputs(self):
-        # Mevcut widget'ları temizle
+        # Mevcut widget'ları temizle (boş durum mesajı dahil)
         while self.fields_layout.count():
             child = self.fields_layout.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
-                
-        self.field_inputs = []
-        
-        # GroupName'lere göre grupla
+            elif child.layout():
+                while child.layout().count():
+                    sub = child.layout().takeAt(0)
+                    if sub.widget():
+                        sub.widget().deleteLater()
+
+        self.field_widgets = {}  # fieldName -> widget (tekil)
+        seen_names = set()
+
+        # Benzersiz alan adlarını, ilk görüldükleri sırada topla
+        unique_fields = []
+        for field in self.fields:
+            if field.field_name not in seen_names:
+                seen_names.add(field.field_name)
+                unique_fields.append(field)
+
+        # GroupName'lere göre grupla (ilk karşılaşılan field'ın group_name'ini kullan)
         grouped_fields = {}
         ungrouped_fields = []
-        
-        for field in self.fields:
+
+        for field in unique_fields:
             if field.group_name:
                 if field.group_name not in grouped_fields:
                     grouped_fields[field.group_name] = []
                 grouped_fields[field.group_name].append(field)
             else:
                 ungrouped_fields.append(field)
-                
+
         # Grupsuz alanları ekle
         if ungrouped_fields:
             form_layout = QFormLayout()
@@ -295,29 +365,13 @@ class TemplateEditorWidget(QWidget):
                 label = QLabel(display_info['label'] + ":")
                 label.setStyleSheet("font-weight: bold; color: #2c3e50;")
                 form_layout.addRow(label, input_widget)
-                self.field_inputs.append((field, input_widget))
+                self.field_widgets[field.field_name] = input_widget
             self.fields_layout.addLayout(form_layout)
-            
+
         # Gruplu alanları ekle
         for group_name, group_fields in grouped_fields.items():
             group_box = QGroupBox(group_name)
-            group_box.setStyleSheet("""
-                QGroupBox {
-                    font-weight: bold;
-                    border: 2px solid #bdc3c7;
-                    border-radius: 5px;
-                    margin-top: 10px;
-                    padding-top: 10px;
-                }
-                QGroupBox::title {
-                    subcontrol-origin: margin;
-                    subcontrol-position: top left;
-                    padding: 0 5px;
-                    background-color: white;
-                    color: #34495e;
-                }
-            """)
-            
+
             group_layout = QFormLayout()
             for field in group_fields:
                 input_widget = self.create_field_input(field)
@@ -325,8 +379,8 @@ class TemplateEditorWidget(QWidget):
                 label = QLabel(display_info['label'] + ":")
                 label.setStyleSheet("font-weight: bold; color: #2c3e50;")
                 group_layout.addRow(label, input_widget)
-                self.field_inputs.append((field, input_widget))
-                
+                self.field_widgets[field.field_name] = input_widget
+
             group_box.setLayout(group_layout)
             self.fields_layout.addWidget(group_box)
             
@@ -343,31 +397,17 @@ class TemplateEditorWidget(QWidget):
         if display_info['field_type'] == 'multiline' or field.length > 50:
             widget = QPlainTextEdit()
             widget.setMaximumHeight(100)
-            placeholder = display_info['placeholder']
-            if 'Maksimum' not in placeholder:
-                placeholder = f"{placeholder} (Maks. {field.length} karakter)"
-            widget.setPlaceholderText(placeholder)
+            widget.setPlaceholderText(display_info['placeholder'])
         else:
             widget = QLineEdit()
-            placeholder = display_info['placeholder']
-            if 'Maksimum' not in placeholder and 'Otomatik' not in placeholder:
-                placeholder = f"{placeholder} (Maks. {field.length} karakter)"
-            widget.setPlaceholderText(placeholder)
+            widget.setPlaceholderText(display_info['placeholder'])
         
-        # Değeri ayarla
+        # Değeri ayarla - sadece özel işleyici varsa doldur, diğerleri boş gelsin
         if special_value:
-            # Özel işleyiciden gelen değer
             if isinstance(widget, QPlainTextEdit):
                 widget.setPlainText(special_value)
             else:
                 widget.setText(special_value)
-        else:
-            # CDATA'dan mevcut değer
-            current_value = self.content_cdata[field.start_offset:field.start_offset + field.length]
-            if isinstance(widget, QPlainTextEdit):
-                widget.setPlainText(current_value)
-            else:
-                widget.setText(current_value)
         
         # Özel alan ise salt okunur yap (otomatik doldurulan alanlar)
         if display_info['field_type'] == 'special':
@@ -376,8 +416,54 @@ class TemplateEditorWidget(QWidget):
             
         return widget
         
+    def export_fields_as_json(self):
+        """Alan değerlerini JSON olarak panoya kopyala"""
+        data = {}
+        for field_name, widget in self.field_widgets.items():
+            if isinstance(widget, QPlainTextEdit):
+                data[field_name] = widget.toPlainText()
+            else:
+                data[field_name] = widget.text()
+
+        json_text = json.dumps(data, ensure_ascii=False, indent=2)
+        QGuiApplication.clipboard().setText(json_text)
+
+        self.status_label.setText("✅ JSON panoya kopyalandı")
+        self.status_label.setStyleSheet("color: #8e44ad; font-weight: bold;")
+
+    def import_fields_from_json(self):
+        """Panodan JSON alıp alanlara doldur"""
+        clipboard_text = QGuiApplication.clipboard().text()
+        if not clipboard_text or not clipboard_text.strip():
+            QMessageBox.warning(self, "Uyarı", "Panoda metin bulunamadı!")
+            return
+
+        try:
+            data = json.loads(clipboard_text)
+        except json.JSONDecodeError as e:
+            QMessageBox.critical(self, "Hata", f"Panodaki metin geçerli bir JSON değil:\n{str(e)}")
+            return
+
+        if not isinstance(data, dict):
+            QMessageBox.critical(self, "Hata", "JSON bir obje (sözlük) olmalıdır.")
+            return
+
+        filled = 0
+        for field_name, value in data.items():
+            widget = self.field_widgets.get(field_name)
+            if widget is None:
+                continue
+            if isinstance(widget, QPlainTextEdit):
+                widget.setPlainText(str(value))
+            else:
+                widget.setText(str(value))
+            filled += 1
+
+        self.status_label.setText(f"✅ {filled} alan JSON'dan dolduruldu")
+        self.status_label.setStyleSheet("color: #8e44ad; font-weight: bold;")
+
     def save_as_udf(self):
-        if not self.xml_tree or not self.field_inputs:
+        if not self.xml_tree or not self.field_widgets:
             QMessageBox.warning(self, "Uyarı", "Önce bir USF dosyası yükleyin!")
             return
             
@@ -425,25 +511,36 @@ class TemplateEditorWidget(QWidget):
             
     def update_content_with_values(self):
         """GUI'deki değerleri alıp CDATA'yı güncelle ve offset'leri yeniden hesapla"""
-        
-        # Değişiklikleri topla (offset'e göre sıralı)
+
+        # Tüm field'lar için değişiklikleri topla (aynı isimli field'lar aynı widget'tan değer alır)
         changes = []
-        for field, widget in self.field_inputs:
+        for field in self.fields:
+            widget = self.field_widgets.get(field.field_name)
+            if widget is None:
+                continue
             if isinstance(widget, QPlainTextEdit):
                 new_value = widget.toPlainText()
             else:
                 new_value = widget.text()
-                
+
             changes.append({
                 'field': field,
                 'new_value': new_value,
-                'original_offset': field.start_offset,
-                'original_length': field.length
             })
-            
+
+        # Aynı offset'teki tekrarlanan field'ları filtrele
+        seen_offsets = set()
+        unique_changes = []
+        for change in changes:
+            offset = change['field'].start_offset
+            if offset not in seen_offsets:
+                seen_offsets.add(offset)
+                unique_changes.append(change)
+        changes = unique_changes
+
         # Offset'e göre sırala (tersten, sondan başa doğru işlem yapacağız)
-        changes.sort(key=lambda x: x['original_offset'], reverse=True)
-        
+        changes.sort(key=lambda x: x['field'].start_offset, reverse=True)
+
         # CDATA'yı güncelle
         new_content = self.content_cdata
 
@@ -453,21 +550,21 @@ class TemplateEditorWidget(QWidget):
             new_value = change['new_value']
             start = field.start_offset
             end = field.start_offset + field.length
-            
+
             # Yeni değeri yerleştir
             new_content = new_content[:start] + new_value + new_content[end:]
-            
+
             # Uzunluk farkını hesapla
             length_diff = len(new_value) - field.length
-            
+
             # Field'ın yeni uzunluğunu güncelle
             field.length = len(new_value)
             field.element.set('length', str(field.length))
-            
+
             # Bu field'dan sonraki tüm offset'leri güncelle
             if length_diff != 0:
                 self.update_offsets_after(field.start_offset, length_diff)
-                
+
         return new_content
         
     def update_offsets_after(self, changed_offset, length_diff):

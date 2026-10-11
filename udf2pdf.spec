@@ -1,14 +1,14 @@
 # -*- mode: python ; coding: utf-8 -*-
 # UDF -> PDF sag-tik donusturucu. onedir (hizli baslangic; merge cok surec acar).
 
+import os
+
 a = Analysis(
     ['udf_to_pdf.py'],
     pathex=[],
     binaries=[],
     datas=[
         ('icons', 'icons'),
-        ('installer/Kurulum-SagTik-PDF.bat', '.'),
-        ('installer/Kaldir-SagTik-PDF.bat', '.'),
     ],
     hiddenimports=[],
     hookspath=[],
@@ -52,3 +52,9 @@ coll = COLLECT(
     upx_exclude=[],
     name='udf2pdf',
 )
+
+# Kurulum/kaldırma .bat dosyaları exe'nin YANINA kopyalanır: `datas` ile verilince
+# PyInstaller 6 onları `_internal/` içine koyar ve `%~dp0udf2pdf.exe` bulunamaz.
+import shutil
+for _bat in ('Kurulum-SagTik-PDF.bat', 'Kaldir-SagTik-PDF.bat'):
+    shutil.copy2(os.path.join('installer', _bat), os.path.join(DISTPATH, 'udf2pdf', _bat))

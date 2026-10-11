@@ -6,6 +6,11 @@ on:
       - 'v*'
   workflow_dispatch:
 
+# Release oluşturmak için GITHUB_TOKEN'a yazma izni gerekir (yoksa 403
+# "Resource not accessible by integration"; v2.1.0 ve ilk v2.2.0 koşusu bu yüzden düştü).
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     runs-on: windows-latest

@@ -14,6 +14,8 @@ import xml.etree.ElementTree as ET
 import json
 from datetime import datetime, timedelta
 
+import udf_motor
+
 
 class FieldInfo:
     def __init__(self, field_element):
@@ -294,8 +296,10 @@ class TemplateEditorWidget(QWidget):
             elements = root.find('elements')
             
             if elements is not None:
-                # Tüm paragraph'ları tara
-                for paragraph in elements.findall('paragraph'):
+                # Tüm paragraph'ları tara - tablo hücresi / üstbilgi / altbilgi içindekiler dahil
+                # (UYAP formlarının çoğu tablodur; yalnız üst düzey paragraf okunursa alanların
+                # yarısı görünmez).
+                for paragraph in elements.iter('paragraph'):
                     # Paragraph'ın GroupName'ini al
                     group_name = paragraph.get('GroupName', None)
                     
@@ -576,9 +580,9 @@ class TemplateEditorWidget(QWidget):
         if elements is None:
             return
             
-        # Tüm paragraph'ları tara
-        for paragraph in elements.findall('paragraph'):
-            # Paragraph içindeki tüm element'leri kontrol et
+        # Offset taşıyan TÜM öğeler (tablo hücresi / üstbilgi / altbilgi içindekiler dahil):
+        # yalnız üst düzey paragraflar kaydırılırsa tablodaki metin yanlış aralığa bağlanır.
+        for paragraph in elements.iter('paragraph'):
             for elem in paragraph:
                 if 'startOffset' in elem.attrib:
                     elem_offset = int(elem.get('startOffset'))
@@ -596,52 +600,52 @@ class TemplateEditorWidget(QWidget):
                                     field.start_offset = new_offset
                                     break
                                     
+    @staticmethod
+    def _xml_kacis(deger):
+        return (str(deger).replace('&', '&amp;').replace('<', '&lt;')
+                .replace('>', '&gt;').replace('"', '&quot;'))
+
+    def _oge_seri(self, el):
+        """Öğeyi alt ağacıyla birlikte seri hale getir (tablo/satır/hücre iç içe korunur;
+        öznitelik değerleri kaçışlı - adres/unvan içindeki `&` ya da `"` XML'i bozmasın)."""
+        attrs = ' '.join(f'{k}="{self._xml_kacis(v)}"' for k, v in el.attrib.items())
+        acilis = f'<{el.tag} {attrs}' if attrs else f'<{el.tag}'
+        if len(el) == 0 and not (el.text or '').strip():
+            return acilis + ' />'
+        ic = ''.join(self._oge_seri(c) for c in el)
+        return f'{acilis}>{ic}</{el.tag}>'
+
     def write_xml_with_cdata(self, root, file_path):
         """XML'i CDATA korunarak dosyaya yaz"""
         lines = []
         lines.append('<?xml version="1.0" encoding="UTF-8" ?> ')
         lines.append('')
-        lines.append(f'<template format_id="{root.get("format_id")}" >')
+        lines.append(f'<template format_id="{self._xml_kacis(root.get("format_id"))}" >')
 
-        # Content with CDATA
+        # Content with CDATA (metinde ']]>' geçerse CDATA bölünür)
         content = root.find('content')
         content_text = content.text or ''
-        lines.append(f'<content><![CDATA[{content_text}]]></content>')
+        lines.append(f'<content>{udf_motor._cdata_sar(content_text)}</content>')
 
         # Properties
         props = root.find('properties')
         if props is not None:
-            props_str = '<properties>'
-            for child in props:
-                attrs = ' '.join(f'{k}="{v}"' for k, v in child.attrib.items())
-                props_str += f'<{child.tag} {attrs} />'
-            props_str += '</properties>'
-            lines.append(props_str)
+            lines.append('<properties>' + ''.join(self._oge_seri(c) for c in props)
+                         + '</properties>')
 
-        # Elements
+        # Elements: paragraf, tablo, üstbilgi/altbilgi - hepsi alt ağacıyla
         elements = root.find('elements')
         if elements is not None:
-            elem_attrs = ' '.join(f'{k}="{v}"' for k, v in elements.attrib.items())
+            elem_attrs = ' '.join(f'{k}="{self._xml_kacis(v)}"' for k, v in elements.attrib.items())
             lines.append(f'<elements {elem_attrs} >')
-            for para in elements:
-                para_attrs = ' '.join(f'{k}="{v}"' for k, v in para.attrib.items())
-                para_line = f'<paragraph {para_attrs}>' if para_attrs else '<paragraph>'
-                for child in para:
-                    child_attrs = ' '.join(f'{k}="{v}"' for k, v in child.attrib.items())
-                    para_line += f'<{child.tag} {child_attrs} />'
-                para_line += '</paragraph>'
-                lines.append(para_line)
+            for dugum in elements:
+                lines.append(self._oge_seri(dugum))
             lines.append('</elements>')
 
         # Styles
         styles = root.find('styles')
         if styles is not None:
-            styles_line = '<styles>'
-            for style in styles:
-                attrs = ' '.join(f'{k}="{v}"' for k, v in style.attrib.items())
-                styles_line += f'<style {attrs} />'
-            styles_line += '</styles>'
-            lines.append(styles_line)
+            lines.append('<styles>' + ''.join(self._oge_seri(c) for c in styles) + '</styles>')
 
         lines.append('</template>')
 

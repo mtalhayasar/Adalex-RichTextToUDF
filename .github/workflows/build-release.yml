@@ -9,33 +9,40 @@ on:
 jobs:
   build-windows:
     runs-on: windows-latest
-    
+
     steps:
-    - uses: actions/checkout@v3
-    
+    - uses: actions/checkout@v4
+
     - name: Python Kurulumu
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
-        python-version: '3.10'
-    
+        python-version: '3.12'
+
     - name: Bağımlılıkları Yükle
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-    
-    - name: PyInstaller ile Build
+
+    - name: AdaLexUDF.exe (zengin metin -> UDF)
       run: |
         pyinstaller --onefile --windowed --icon=icons/solo-logo-manual.ico --add-data "logo.png;." --add-data "solo-logo.png;." --add-data "icons;icons" --name AdaLexUDF rtf-to-udf.py
-    
+
+    - name: udf2pdf (UDF -> PDF sağ tık)
+      run: |
+        pyinstaller udf2pdf.spec --noconfirm
+        Compress-Archive -Path dist/udf2pdf -DestinationPath dist/udf2pdf.zip
+
     - name: Build Çıktısını Kontrol Et
       run: |
         dir dist
-    
+
     - name: Release Oluştur
       if: startsWith(github.ref, 'refs/tags/')
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
-        files: dist/AdaLexUDF.exe
+        files: |
+          dist/AdaLexUDF.exe
+          dist/udf2pdf.zip
         generate_release_notes: true
         draft: false
         prerelease: false

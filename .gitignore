@@ -43,3 +43,9 @@ Desktop.ini
 test/
 tests/
 *.test.*
+# udf2pdf.exe derleme yapılandırması (CI kullanır)
+!udf2pdf.spec
+
+# Yerel artıklar
+tmpclaude-*
+sablonlar/test_*
